@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ActiveSaleDraft, CachedCustomer, CachedProduct, FailedOperation, OfflineSalesReceipt, OpenDocument, TerminalBootstrapData, TerminalSettings, UserSession } from '../types';
+import type { FieldTestChecklistState, FieldTestLogEntry } from '../types/fieldTest';
 import {
   loadCachedCustomersFromSQLite,
   loadCachedProductsFromSQLite,
@@ -21,6 +22,21 @@ const KEYS = {
   cachedCustomers: 'melisa-terminal:cached-customers',
   bootstrapMeta: 'melisa-terminal:bootstrap-meta',
   lastSyncAt: 'melisa-terminal:last-sync-at',
+  fieldTestChecklist: 'melisa-terminal:field-test-checklist',
+  fieldTestLogs: 'melisa-terminal:field-test-logs',
+};
+
+export const defaultFieldTestChecklist: FieldTestChecklistState = {
+  apiHealthChecked: false,
+  bootstrapDownloaded: false,
+  productCacheChecked: false,
+  customerCacheChecked: false,
+  wifiDisabled: false,
+  offlineSaleCreated: false,
+  receiptPendingChecked: false,
+  wifiEnabled: false,
+  receiptSynced: false,
+  duplicateSyncChecked: false,
 };
 
 const defaultSettings: TerminalSettings = {
@@ -205,4 +221,37 @@ export async function loadLastSyncAt(): Promise<string | null> {
 
 export async function checkSQLiteAvailable(): Promise<boolean> {
   return isSQLiteAvailable();
+}
+
+export async function loadFieldTestChecklist(): Promise<FieldTestChecklistState> {
+  const checklist = await readJson<FieldTestChecklistState>(KEYS.fieldTestChecklist, defaultFieldTestChecklist);
+  return { ...defaultFieldTestChecklist, ...checklist };
+}
+
+export async function saveFieldTestChecklist(checklist: FieldTestChecklistState): Promise<void> {
+  await writeJson(KEYS.fieldTestChecklist, checklist);
+}
+
+export async function resetFieldTestChecklist(): Promise<void> {
+  await writeJson(KEYS.fieldTestChecklist, defaultFieldTestChecklist);
+}
+
+export async function loadFieldTestLogs(): Promise<FieldTestLogEntry[]> {
+  return readJson<FieldTestLogEntry[]>(KEYS.fieldTestLogs, []);
+}
+
+export async function appendFieldTestLog(entry: Omit<FieldTestLogEntry, 'id' | 'createdAt'>): Promise<FieldTestLogEntry[]> {
+  const logs = await loadFieldTestLogs();
+  const nextEntry: FieldTestLogEntry = {
+    ...entry,
+    id: `field-log-${Date.now()}`,
+    createdAt: new Date().toISOString(),
+  };
+  const nextLogs = [nextEntry, ...logs].slice(0, 50);
+  await writeJson(KEYS.fieldTestLogs, nextLogs);
+  return nextLogs;
+}
+
+export async function clearFieldTestLogs(): Promise<void> {
+  await writeJson(KEYS.fieldTestLogs, []);
 }
