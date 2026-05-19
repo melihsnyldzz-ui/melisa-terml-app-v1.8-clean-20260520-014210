@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Expo / React Native
+.expo/
+.expo-shared/
+dist/
+build/
+web-build/
+expo-env.d.ts
+
+# Local environment
+.env
+.env.*
+
+# Debug logs
+npm-debug.log*
+yarn-error.log*
+yarn-debug.log*
+
+# Generated local preview artifacts
+.edge-preview-profile/
+expo-web.log
+melisa-terminal-preview.png
+
+# Native secrets and local files
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+
+# Generated native folders
+/ios
+/android
+
+# TypeScript
+*.tsbuildinfo
+
+# OS
+.DS_Store

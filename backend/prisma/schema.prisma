@@ -1,0 +1,265 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MovementType {
+  PURCHASE_IN
+  SALE_OUT
+  ADJUSTMENT
+  CANCEL
+}
+
+enum SyncStatus {
+  PENDING
+  SYNCED
+  FAILED
+}
+
+enum Currency {
+  TRY
+  USD
+  EUR
+}
+
+enum ReceiptStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  STAFF
+}
+
+model User {
+  id           Int        @id @default(autoincrement())
+  name         String
+  username     String     @unique
+  passwordHash String     @map("password_hash")
+  role         UserRole   @default(STAFF)
+  active       Boolean    @default(true)
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  auditLogs    AuditLog[]
+
+  @@map("users")
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?     @map("user_id")
+  action      String
+  entityType  String   @map("entity_type")
+  entityId    Int      @map("entity_id")
+  detailsJson Json?    @map("details_json")
+  createdAt   DateTime @default(now()) @map("created_at")
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Product {
+  id                 Int                   @id @default(autoincrement())
+  stockCode          String                @unique @map("stock_code")
+  barcode            String                @unique
+  brand              String
+  typeName           String                @map("type_name")
+  quantity           Decimal               @default(0) @db.Decimal(12, 2)
+  buyPrice           Decimal               @default(0) @map("buy_price") @db.Decimal(12, 2)
+  sellPrice          Decimal               @default(0) @map("sell_price") @db.Decimal(12, 2)
+  buyPriceTry        Decimal               @default(0) @map("buy_price_try") @db.Decimal(12, 2)
+  buyPriceUsd        Decimal?              @map("buy_price_usd") @db.Decimal(12, 2)
+  buyPriceEur        Decimal?              @map("buy_price_eur") @db.Decimal(12, 2)
+  sellPriceTry       Decimal               @default(0) @map("sell_price_try") @db.Decimal(12, 2)
+  sellPriceUsd       Decimal?              @map("sell_price_usd") @db.Decimal(12, 2)
+  sellPriceEur       Decimal?              @map("sell_price_eur") @db.Decimal(12, 2)
+  active             Boolean               @default(true)
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
+  purchaseItems      PurchaseReceiptItem[]
+  salesItems         SalesReceiptItem[]
+  stockMovements     StockMovement[]
+
+  @@map("products")
+}
+
+model Customer {
+  id            Int            @id @default(autoincrement())
+  name          String
+  phone         String?
+  balance       Decimal        @default(0) @db.Decimal(12, 2)
+  defaultCurrency Currency     @default(TRY) @map("default_currency")
+  balanceTry    Decimal        @default(0) @map("balance_try") @db.Decimal(12, 2)
+  balanceUsd    Decimal        @default(0) @map("balance_usd") @db.Decimal(12, 2)
+  balanceEur    Decimal        @default(0) @map("balance_eur") @db.Decimal(12, 2)
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  salesReceipts SalesReceipt[]
+
+  @@map("customers")
+}
+
+model Supplier {
+  id               Int               @id @default(autoincrement())
+  name             String
+  phone            String?
+  balance          Decimal           @default(0) @db.Decimal(12, 2)
+  defaultCurrency  Currency          @default(TRY) @map("default_currency")
+  balanceTry       Decimal           @default(0) @map("balance_try") @db.Decimal(12, 2)
+  balanceUsd       Decimal           @default(0) @map("balance_usd") @db.Decimal(12, 2)
+  balanceEur       Decimal           @default(0) @map("balance_eur") @db.Decimal(12, 2)
+  active           Boolean           @default(true)
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  purchaseReceipts PurchaseReceipt[]
+
+  @@map("suppliers")
+}
+
+model PurchaseReceipt {
+  id            Int                   @id @default(autoincrement())
+  supplierId    Int                   @map("supplier_id")
+  documentNo    String                @unique @map("document_no")
+  totalAmount   Decimal               @map("total_amount") @db.Decimal(12, 2)
+  totalAmountTry Decimal?              @map("total_amount_try") @db.Decimal(12, 2)
+  currency      Currency              @default(TRY)
+  exchangeRateSnapshot Json?           @map("exchange_rate_snapshot")
+  usdToTry      Decimal               @default(1) @map("usd_to_try") @db.Decimal(12, 6)
+  eurToTry      Decimal               @default(1) @map("eur_to_try") @db.Decimal(12, 6)
+  eurToUsd      Decimal?              @map("eur_to_usd") @db.Decimal(12, 6)
+  note          String?
+  status        ReceiptStatus         @default(ACTIVE)
+  cancelled     Boolean               @default(false)
+  cancelledAt   DateTime?             @map("cancelled_at")
+  cancelReason  String?               @map("cancel_reason")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  supplier      Supplier              @relation(fields: [supplierId], references: [id])
+  items         PurchaseReceiptItem[]
+
+  @@map("purchase_receipts")
+}
+
+model PurchaseReceiptItem {
+  id                Int             @id @default(autoincrement())
+  purchaseReceiptId Int             @map("purchase_receipt_id")
+  productId         Int             @map("product_id")
+  quantity          Decimal         @db.Decimal(12, 2)
+  unitPrice         Decimal         @map("unit_price") @db.Decimal(12, 2)
+  lineTotal         Decimal         @map("line_total") @db.Decimal(12, 2)
+  currency          Currency        @default(TRY)
+  originalUnitPrice Decimal?        @map("original_unit_price") @db.Decimal(12, 2)
+  originalCurrency  Currency?       @map("original_currency")
+  receiptCurrency   Currency?       @map("receipt_currency")
+  exchangeRateUsed  Decimal?        @map("exchange_rate_used") @db.Decimal(12, 6)
+  convertedUnitPrice Decimal?       @map("converted_unit_price") @db.Decimal(12, 2)
+  usdToTry          Decimal         @default(1) @map("usd_to_try") @db.Decimal(12, 6)
+  eurToTry          Decimal         @default(1) @map("eur_to_try") @db.Decimal(12, 6)
+  eurToUsd          Decimal?        @map("eur_to_usd") @db.Decimal(12, 6)
+  purchaseReceipt   PurchaseReceipt @relation(fields: [purchaseReceiptId], references: [id])
+  product           Product         @relation(fields: [productId], references: [id])
+
+  @@map("purchase_receipt_items")
+}
+
+model SalesReceipt {
+  id            Int                @id @default(autoincrement())
+  customerId    Int                @map("customer_id")
+  documentNo    String             @unique @map("document_no")
+  totalAmount   Decimal            @map("total_amount") @db.Decimal(12, 2)
+  totalAmountTry Decimal?           @map("total_amount_try") @db.Decimal(12, 2)
+  currency      Currency           @default(TRY)
+  exchangeRateSnapshot Json?        @map("exchange_rate_snapshot")
+  usdToTry      Decimal            @default(1) @map("usd_to_try") @db.Decimal(12, 6)
+  eurToTry      Decimal            @default(1) @map("eur_to_try") @db.Decimal(12, 6)
+  eurToUsd      Decimal?           @map("eur_to_usd") @db.Decimal(12, 6)
+  synced        Boolean            @default(false)
+  terminalId    String?            @map("terminal_id")
+  localUuid     String?            @unique @map("local_uuid")
+  note          String?
+  status        ReceiptStatus         @default(ACTIVE)
+  cancelled     Boolean            @default(false)
+  cancelledAt   DateTime?          @map("cancelled_at")
+  cancelReason  String?            @map("cancel_reason")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  customer      Customer           @relation(fields: [customerId], references: [id])
+  items         SalesReceiptItem[]
+
+  @@map("sales_receipts")
+}
+
+model SalesReceiptItem {
+  id             Int          @id @default(autoincrement())
+  salesReceiptId Int          @map("sales_receipt_id")
+  productId      Int          @map("product_id")
+  quantity       Decimal      @db.Decimal(12, 2)
+  unitPrice      Decimal      @map("unit_price") @db.Decimal(12, 2)
+  lineTotal      Decimal      @map("line_total") @db.Decimal(12, 2)
+  currency       Currency     @default(TRY)
+  originalUnitPrice Decimal?   @map("original_unit_price") @db.Decimal(12, 2)
+  originalCurrency  Currency?  @map("original_currency")
+  receiptCurrency   Currency?  @map("receipt_currency")
+  exchangeRateUsed  Decimal?   @map("exchange_rate_used") @db.Decimal(12, 6)
+  convertedUnitPrice Decimal?  @map("converted_unit_price") @db.Decimal(12, 2)
+  usdToTry       Decimal      @default(1) @map("usd_to_try") @db.Decimal(12, 6)
+  eurToTry       Decimal      @default(1) @map("eur_to_try") @db.Decimal(12, 6)
+  eurToUsd       Decimal?     @map("eur_to_usd") @db.Decimal(12, 6)
+  salesReceipt   SalesReceipt @relation(fields: [salesReceiptId], references: [id])
+  product        Product      @relation(fields: [productId], references: [id])
+
+  @@map("sales_receipt_items")
+}
+
+model StockMovement {
+  id                 Int           @id @default(autoincrement())
+  productId          Int           @map("product_id")
+  movementType       MovementType  @map("movement_type")
+  quantity           Decimal       @db.Decimal(12, 2)
+  sourceDocumentType String        @map("source_document_type")
+  sourceDocumentId   Int           @map("source_document_id")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  product            Product       @relation(fields: [productId], references: [id])
+
+  @@map("stock_movements")
+}
+
+model TerminalSyncQueue {
+  id          Int        @id @default(autoincrement())
+  localUuid   String     @unique @map("local_uuid")
+  terminalId  String     @map("terminal_id")
+  payloadJson Json       @map("payload_json")
+  status      SyncStatus @default(PENDING)
+  retryCount  Int        @default(0) @map("retry_count")
+  lastError   String?    @map("last_error")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  syncedAt    DateTime?  @map("synced_at")
+
+  @@map("terminal_sync_queue")
+}
+
+model ExchangeRate {
+  id            Int      @id @default(autoincrement())
+  baseCurrency  Currency? @map("base_currency")
+  targetCurrency Currency? @map("target_currency")
+  rate          Decimal? @db.Decimal(12, 6)
+  usdToTry      Decimal  @map("usd_to_try") @db.Decimal(12, 6)
+  eurToTry      Decimal  @map("eur_to_try") @db.Decimal(12, 6)
+  tryToUsd      Decimal? @map("try_to_usd") @db.Decimal(12, 6)
+  tryToEur      Decimal? @map("try_to_eur") @db.Decimal(12, 6)
+  eurToUsd      Decimal? @map("eur_to_usd") @db.Decimal(12, 6)
+  usdToEur      Decimal? @map("usd_to_eur") @db.Decimal(12, 6)
+  effectiveDate DateTime @map("effective_date")
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("exchange_rates")
+}
