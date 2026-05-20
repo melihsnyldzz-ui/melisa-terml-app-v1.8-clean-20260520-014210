@@ -21,6 +21,10 @@ function isLocalWebAdminOpenMode() {
   return process.env.NODE_ENV !== 'production' && process.env.WEB_ADMIN_OPEN_MODE === 'true';
 }
 
+function openAdminUser(): AuthUser {
+  return { userId: 0, username: 'open-admin', role: 'ADMIN' };
+}
+
 export function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
   if (!secret && process.env.NODE_ENV === 'production') {
@@ -38,8 +42,8 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   const header = req.header('authorization') ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
 
-  if (!token && isLocalWebAdminOpenMode()) {
-    req.user = { userId: 0, username: 'open-admin', role: 'ADMIN' };
+  if (isLocalWebAdminOpenMode() && (!token || token === 'open-admin')) {
+    req.user = openAdminUser();
     next();
     return;
   }
