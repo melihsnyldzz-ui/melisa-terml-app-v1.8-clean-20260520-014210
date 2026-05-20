@@ -4,14 +4,19 @@ import { getDatabaseUrl } from './config.js';
 import authRoutes from './modules/auth/auth.routes.js';
 import { requireAuth } from './modules/auth/auth.js';
 import customersRoutes from './modules/customers/customers.routes.js';
+import currentAccountRoutes from './modules/current-account/current-account.routes.js';
 import exchangeRatesRoutes from './modules/currency/exchange-rates.routes.js';
 import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
+import importRoutes from './modules/import/import.routes.js';
 import productsRoutes from './modules/products/products.routes.js';
+import reportsRoutes from './modules/reports/reports.routes.js';
 import purchaseReceiptsRoutes from './modules/receipts/purchase-receipts.routes.js';
 import salesReceiptsRoutes from './modules/receipts/sales-receipts.routes.js';
 import stockMovementsRoutes from './modules/stock-movements/stock-movements.routes.js';
 import suppliersRoutes from './modules/suppliers/suppliers.routes.js';
 import systemRoutes from './modules/system/system.routes.js';
+import terminalDevicesRoutes from './modules/terminal/terminal-devices.routes.js';
+import terminalSyncRoutes from './modules/terminal/terminal-sync.routes.js';
 import terminalRoutes from './modules/terminal/terminal.routes.js';
 import usersRoutes from './modules/users/users.routes.js';
 import { prisma } from './prisma/client.js';
@@ -19,7 +24,7 @@ import { prisma } from './prisma/client.js';
 export const app = express();
 
 app.use(cors());
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '5mb' }));
 
 app.get('/api/health', async (_req, res) => {
   let databaseConnected = false;
@@ -42,16 +47,22 @@ app.get('/api/health', async (_req, res) => {
 });
 
 app.use('/api/dashboard', requireAuth, dashboardRoutes);
+app.use('/api/reports', requireAuth, reportsRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/exchange-rates', exchangeRatesRoutes);
+app.use('/api/import', requireAuth, importRoutes);
 app.use('/api/products', requireAuth, productsRoutes);
 app.use('/api/customers', requireAuth, customersRoutes);
+app.use('/api/current-account', requireAuth, currentAccountRoutes);
 app.use('/api/suppliers', requireAuth, suppliersRoutes);
 app.use('/api/purchase-receipts', requireAuth, purchaseReceiptsRoutes);
 app.use('/api/sales-receipts', requireAuth, salesReceiptsRoutes);
+app.use('/api/sales', requireAuth, salesReceiptsRoutes);
 app.use('/api/stock-movements', requireAuth, stockMovementsRoutes);
 app.use('/api/system', requireAuth, systemRoutes);
 app.use('/api/terminal', terminalRoutes);
+app.use('/api/terminal-sync', terminalSyncRoutes);
+app.use('/api/terminal-devices', terminalDevicesRoutes);
 app.use('/api/users', requireAuth, usersRoutes);
 
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

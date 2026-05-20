@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { ActiveSaleDraft, CachedCustomer, CachedProduct, FailedOperation, OfflineSalesReceipt, OpenDocument, TerminalBootstrapData, TerminalSettings, UserSession } from '../types';
+import type { ActiveSaleDraft, CachedCustomer, CachedProduct, FailedOperation, OfflineSalesReceipt, OfflineSyncSummary, OpenDocument, TerminalBootstrapData, TerminalSettings, UserSession } from '../types';
 import type { FieldTestChecklistState, FieldTestLogEntry } from '../types/fieldTest';
 import {
   loadCachedCustomersFromSQLite,
@@ -131,6 +131,16 @@ export async function saveOfflineSalesReceipt(receipt: OfflineSalesReceipt): Pro
   } catch {
     // SQLite is the preferred queue, AsyncStorage remains the compatibility layer.
   }
+}
+
+export async function loadOfflineSyncSummary(): Promise<OfflineSyncSummary> {
+  const receipts = await loadOfflineSalesReceipts();
+  return {
+    total: receipts.length,
+    pending: receipts.filter((receipt) => (receipt.status ?? 'PENDING') === 'PENDING' && !receipt.synced).length,
+    synced: receipts.filter((receipt) => receipt.status === 'SYNCED' || receipt.synced).length,
+    failed: receipts.filter((receipt) => receipt.status === 'FAILED').length,
+  };
 }
 
 export async function markOfflineSalesReceiptSynced(localUuid: string): Promise<void> {

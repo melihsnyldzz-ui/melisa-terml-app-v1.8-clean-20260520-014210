@@ -2,23 +2,24 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../prisma/client.js';
 import { asyncHandler } from '../../utils.js';
+import { requirePermission } from '../auth/auth.js';
 
 const router = Router();
 
 const filtersSchema = z.object({
   productId: z.coerce.number().int().positive().optional(),
-  movementType: z.enum(['PURCHASE_IN', 'SALE_OUT', 'ADJUSTMENT', 'CANCEL']).optional(),
+  movementType: z.enum(['PURCHASE_IN', 'SALE_OUT', 'ADJUSTMENT', 'ADJUSTMENT_IN', 'ADJUSTMENT_OUT', 'CANCEL']).optional(),
   dateFrom: z.string().datetime().optional(),
   dateTo: z.string().datetime().optional(),
   sourceDocumentType: z.string().optional(),
 });
 
-router.get('/', asyncHandler(async (req, res) => {
+router.get('/', requirePermission('stockView'), asyncHandler(async (req, res) => {
   const filters = filtersSchema.parse(req.query);
   const movements = await prisma.stockMovement.findMany({
     where: {
       productId: filters.productId,
-      movementType: filters.movementType,
+      movementType: filters.movementType as any,
       sourceDocumentType: filters.sourceDocumentType,
       createdAt: filters.dateFrom || filters.dateTo ? {
         gte: filters.dateFrom ? new Date(filters.dateFrom) : undefined,
@@ -46,8 +47,13 @@ router.get('/', asyncHandler(async (req, res) => {
     productStockCode: movement.product.stockCode,
     movementType: movement.movementType,
     quantity: movement.quantity,
+    unitCostTry: movement.unitCostTry,
+    valueChangeTry: movement.valueChangeTry,
+    stockAfter: movement.stockAfter,
+    averageCostAfterTry: movement.averageCostAfterTry,
     sourceDocumentType: movement.sourceDocumentType,
     sourceDocumentId: movement.sourceDocumentId,
+    note: movement.note,
     documentNo: movement.sourceDocumentType === 'sales_receipt'
       ? salesMap.get(movement.sourceDocumentId) ?? null
       : movement.sourceDocumentType === 'purchase_receipt'

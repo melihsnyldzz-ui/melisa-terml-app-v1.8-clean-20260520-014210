@@ -8,7 +8,7 @@ import { StatusPill } from '../../components/StatusPill';
 import { ToastMessage, ToastTone } from '../../components/ToastMessage';
 import { createSaleMock, getMockProductByCode } from '../../services/api';
 import { notifySuccess, notifyWarning } from '../../services/feedback';
-import { clearActiveSaleDraft, loadActiveSaleDraft, loadBootstrapMeta, loadCachedCustomers, loadCachedProducts, loadSettings, saveActiveSaleDraft, saveOfflineSalesReceipt } from '../../storage/localStorage';
+import { appendFieldTestLog, clearActiveSaleDraft, loadActiveSaleDraft, loadBootstrapMeta, loadCachedCustomers, loadCachedProducts, loadSettings, saveActiveSaleDraft, saveOfflineSalesReceipt } from '../../storage/localStorage';
 import type { ActiveSaleDraft, CachedCustomer, CachedProduct, CurrencyCode, ExchangeRateSnapshot, SaleLine, SaleStatus } from '../../types';
 import { colors, radius, spacing, typography } from '../theme';
 
@@ -233,6 +233,11 @@ export function NewSaleScreen({ onBack }: NewSaleScreenProps) {
       quantity: nextQuantity,
       time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
     });
+    await appendFieldTestLog({
+      title: 'Barkod okutma kaydı',
+      detail: `${pricedProduct.code} / adet ${nextQuantity}`,
+      tone: 'info',
+    });
     setBanner({ message: `${pricedProduct.code} fişe eklendi.`, tone: 'success' });
     notifySuccess();
     focusScanner();
@@ -345,6 +350,11 @@ export function NewSaleScreen({ onBack }: NewSaleScreenProps) {
       retryCount: 0,
       createdAt: new Date().toISOString(),
       lines,
+    });
+    await appendFieldTestLog({
+      title: 'Offline kayıt kuyruğa eklendi',
+      detail: `${documentNo} / ${lines.length} kalem / ${localUuid}`,
+      tone: 'success',
     });
     await clearActiveSaleDraft();
     setDocumentNo('');

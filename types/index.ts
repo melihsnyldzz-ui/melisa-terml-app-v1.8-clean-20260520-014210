@@ -98,6 +98,13 @@ export type OfflineSalesReceipt = {
   lines: SaleLine[];
 };
 
+export type OfflineSyncSummary = {
+  total: number;
+  pending: number;
+  synced: number;
+  failed: number;
+};
+
 export type CachedProduct = {
   id: number;
   stockCode: string;

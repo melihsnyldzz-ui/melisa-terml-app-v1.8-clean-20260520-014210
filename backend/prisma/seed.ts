@@ -116,7 +116,7 @@ async function main() {
     where: { username: 'staff' },
     update: {
       name: 'Satis Personeli',
-      role: 'STAFF',
+      role: 'SALES',
       active: true,
       passwordHash: staffPasswordHash,
     },
@@ -124,7 +124,7 @@ async function main() {
       name: 'Satis Personeli',
       username: 'staff',
       passwordHash: staffPasswordHash,
-      role: 'STAFF',
+      role: 'SALES',
       active: true,
     },
   });

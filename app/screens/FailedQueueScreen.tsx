@@ -8,8 +8,8 @@ import { ToastMessage } from '../../components/ToastMessage';
 import type { ToastTone } from '../../components/ToastMessage';
 import { getFailedOperationsMock, syncOfflineSalesReceipt } from '../../services/api';
 import { notifySuccess } from '../../services/feedback';
-import { loadFailedOperationsSnapshot, loadOfflineSalesReceipts, loadSettings, markOfflineSalesReceiptFailed, markOfflineSalesReceiptSynced, saveFailedOperations } from '../../storage/localStorage';
-import type { FailedOperation, OfflineSalesReceipt } from '../../types';
+import { appendFieldTestLog, loadFailedOperationsSnapshot, loadOfflineSalesReceipts, loadOfflineSyncSummary, loadSettings, markOfflineSalesReceiptFailed, markOfflineSalesReceiptSynced, saveFailedOperations } from '../../storage/localStorage';
+import type { FailedOperation, OfflineSalesReceipt, OfflineSyncSummary } from '../../types';
 import { colors, radius, spacing, typography } from '../theme';
 
 type FailedQueueScreenProps = {
@@ -19,6 +19,7 @@ type FailedQueueScreenProps = {
 export function FailedQueueScreen({ onBack }: FailedQueueScreenProps) {
   const [operations, setOperations] = useState<FailedOperation[]>([]);
   const [offlineReceipts, setOfflineReceipts] = useState<OfflineSalesReceipt[]>([]);
+  const [summary, setSummary] = useState<OfflineSyncSummary>({ total: 0, pending: 0, synced: 0, failed: 0 });
   const [filter, setFilter] = useState<'all' | 'pending' | 'failed' | 'synced'>('all');
   const [banner, setBanner] = useState<{ message: string; tone: ToastTone } | null>(null);
 
@@ -29,6 +30,7 @@ export function FailedQueueScreen({ onBack }: FailedQueueScreenProps) {
   const loadQueue = async () => {
     const savedOperations = await loadFailedOperationsSnapshot();
     const receipts = await loadOfflineSalesReceipts();
+    setSummary(await loadOfflineSyncSummary());
     setOfflineReceipts(receipts);
     if (savedOperations) {
       setOperations([...receipts.map(receiptToOperation), ...savedOperations]);
@@ -47,11 +49,21 @@ export function FailedQueueScreen({ onBack }: FailedQueueScreenProps) {
         const settings = await loadSettings();
         const result = await syncOfflineSalesReceipt(offlineReceipt, settings.apiBaseUrl);
         await markOfflineSalesReceiptSynced(offlineReceipt.localUuid);
+        await appendFieldTestLog({
+          title: result.duplicate ? 'Duplicate sync engellendi' : 'Offline fiş senkronlandı',
+          detail: `${operation.documentNo} / ${offlineReceipt.localUuid}`,
+          tone: 'success',
+        });
         setOfflineReceipts((current) => current.filter((receipt) => receipt.localUuid !== offlineReceipt.localUuid));
         setBanner({ message: result.duplicate ? 'Bu fiş daha önce gönderilmiş, sistemde kayıtlı.' : `${operation.documentNo} merkeze gönderildi.`, tone: 'success' });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Senkron başarısız.';
         await markOfflineSalesReceiptFailed(offlineReceipt.localUuid, message);
+        await appendFieldTestLog({
+          title: 'Offline sync hatalı kaldı',
+          detail: `${operation.documentNo} / ${shortenError(message)}`,
+          tone: 'error',
+        });
         setBanner({ message, tone: 'warning' });
         await loadQueue();
         return;
@@ -68,17 +80,30 @@ export function FailedQueueScreen({ onBack }: FailedQueueScreenProps) {
   const retryAll = async () => {
     const settings = await loadSettings();
     let successCount = 0;
+    let failedCount = 0;
     for (const receipt of offlineReceipts.filter((item) => item.status !== 'SYNCED' && !item.synced)) {
       try {
-        await syncOfflineSalesReceipt(receipt, settings.apiBaseUrl);
+        const result = await syncOfflineSalesReceipt(receipt, settings.apiBaseUrl);
         await markOfflineSalesReceiptSynced(receipt.localUuid);
         successCount += 1;
+        await appendFieldTestLog({
+          title: result.duplicate ? 'Duplicate sync engellendi' : 'Offline fiş senkronlandı',
+          detail: `${receipt.documentNo} / ${receipt.localUuid}`,
+          tone: 'success',
+        });
       } catch (error) {
-        await markOfflineSalesReceiptFailed(receipt.localUuid, error instanceof Error ? error.message : 'Senkron başarısız.');
+        failedCount += 1;
+        const message = error instanceof Error ? error.message : 'Senkron başarısız.';
+        await markOfflineSalesReceiptFailed(receipt.localUuid, message);
+        await appendFieldTestLog({
+          title: 'Offline sync hatalı kaldı',
+          detail: `${receipt.documentNo} / ${shortenError(message)}`,
+          tone: 'error',
+        });
       }
     }
     await loadQueue();
-    setBanner({ message: `${successCount} fiş başarıyla gönderildi.`, tone: successCount === offlineReceipts.length ? 'success' : 'warning' });
+    setBanner({ message: `${successCount} başarılı, ${failedCount} hatalı kaldı.`, tone: failedCount === 0 ? 'success' : 'warning' });
     notifySuccess();
   };
 
@@ -98,6 +123,11 @@ export function FailedQueueScreen({ onBack }: FailedQueueScreenProps) {
           <View>
             <Text style={styles.topTitle}>Offline kuyruk</Text>
             <Text style={styles.topText}>Bağlantı hazır olduğunda yeniden gönderilir.</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <SummaryBox label="Bekleyen" value={summary.pending.toString()} tone="warning" />
+            <SummaryBox label="Gönderilen" value={summary.synced.toString()} tone="success" />
+            <SummaryBox label="Hatalı" value={summary.failed.toString()} tone="danger" />
           </View>
           <View style={styles.filterRow}>
             <FilterButton label="Tümü" active={filter === 'all'} onPress={() => setFilter('all')} />
@@ -179,6 +209,15 @@ function InfoItem({ label, value }: { label: string; value: string }) {
   );
 }
 
+function SummaryBox({ label, value, tone }: { label: string; value: string; tone: 'success' | 'warning' | 'danger' }) {
+  return (
+    <View style={[styles.summaryBox, styles[`summary_${tone}`]]}>
+      <Text style={styles.summaryValue}>{value}</Text>
+      <Text style={styles.summaryLabel}>{label}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   topPanel: {
     backgroundColor: colors.surface,
@@ -192,6 +231,22 @@ const styles = StyleSheet.create({
   },
   topTitle: { color: colors.ink, fontSize: typography.section, fontWeight: '900' },
   topText: { color: colors.muted, fontSize: typography.small, fontWeight: '800', marginTop: 2 },
+  summaryRow: { flexDirection: 'row', gap: spacing.xs },
+  summaryBox: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingVertical: 5,
+    paddingHorizontal: spacing.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summary_success: { borderColor: colors.green, backgroundColor: '#eefbf4' },
+  summary_warning: { borderColor: '#f59e0b', backgroundColor: '#fff7ed' },
+  summary_danger: { borderColor: colors.red, backgroundColor: '#fef2f2' },
+  summaryValue: { color: colors.ink, fontSize: typography.section, fontWeight: '900' },
+  summaryLabel: { color: colors.muted, fontSize: typography.small, fontWeight: '900' },
   filterRow: { flexDirection: 'row', gap: spacing.xs },
   filterButton: {
     flex: 1,

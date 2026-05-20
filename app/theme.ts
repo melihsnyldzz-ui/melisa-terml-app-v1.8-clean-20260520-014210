@@ -12,6 +12,7 @@ export const colors = {
   dangerSoft: '#fff0f2',
   warningSoft: '#fff7e8',
   success: '#15803d',
+  green: '#15803d',
   successSoft: '#ecfdf3',
   amber: '#b45309',
 };
@@ -34,6 +35,7 @@ export const typography = {
   brand: 20,
   title: 18,
   section: 15,
+  subtitle: 15,
   body: 13,
   small: 11,
 };

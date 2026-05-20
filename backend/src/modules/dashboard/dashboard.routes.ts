@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { prisma } from '../../prisma/client.js';
 import { asyncHandler } from '../../utils.js';
+import { requirePermission } from '../auth/auth.js';
 
 const router = Router();
 
-router.get('/stats', asyncHandler(async (_req, res) => {
+router.get('/stats', requirePermission('reportsView'), asyncHandler(async (_req, res) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 

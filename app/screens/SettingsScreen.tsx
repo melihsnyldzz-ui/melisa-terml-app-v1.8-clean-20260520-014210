@@ -9,7 +9,7 @@ import { ToastMessage } from '../../components/ToastMessage';
 import type { ToastTone } from '../../components/ToastMessage';
 import { testApiHealth } from '../../services/api';
 import { notifySuccess, notifyWarning } from '../../services/feedback';
-import { loadSettings, saveLastSuccessfulConnectionAt, saveSettings } from '../../storage/localStorage';
+import { appendFieldTestLog, loadSettings, saveLastSuccessfulConnectionAt, saveSettings } from '../../storage/localStorage';
 import type { TerminalSettings, UserSession } from '../../types';
 import { colors, radius, spacing, typography } from '../theme';
 
@@ -63,17 +63,32 @@ export function SettingsScreen({ onBack, onLogout, session }: SettingsScreenProp
     try {
       const result = await testApiHealth(settings.apiBaseUrl);
       if (!result.databaseConnected) {
+        await appendFieldTestLog({
+          title: 'Online erişim testi DB uyarısı',
+          detail: `${result.status} / database=YOK`,
+          tone: 'warning',
+        });
         setBanner({ message: 'API çalışıyor, veritabanı bağlantısı yok.', tone: 'warning' });
         notifyWarning();
         return;
       }
       const timestamp = new Date().toISOString();
       await saveLastSuccessfulConnectionAt(timestamp);
+      await appendFieldTestLog({
+        title: 'Online erişim testi başarılı',
+        detail: `${result.status} / database=${result.databaseConnected ? 'OK' : 'YOK'}`,
+        tone: 'success',
+      });
       setSettings((current) => ({ ...current, lastSuccessfulConnectionAt: timestamp }));
       setBanner({ message: 'Bağlantı başarılı.', tone: 'success' });
       notifySuccess();
       return;
     } catch {
+      await appendFieldTestLog({
+        title: 'Online erişim testi başarısız',
+        detail: settings.apiBaseUrl,
+        tone: 'error',
+      });
       setBanner({ message: 'Bağlantı yok / API adresini kontrol edin.', tone: 'error' });
     }
     notifyWarning();

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../../prisma/client.js';
 import { asyncHandler, idParamSchema } from '../../utils.js';
 import { writeAuditLog } from '../audit/audit.js';
-import { requireRole } from '../auth/auth.js';
+import { requirePermission } from '../auth/auth.js';
 
 const router = Router();
 
@@ -18,12 +18,12 @@ const supplierSchema = z.object({
   active: z.boolean().default(true),
 });
 
-router.get('/', asyncHandler(async (_req, res) => {
+router.get('/', requirePermission('partyManage'), asyncHandler(async (_req, res) => {
   const suppliers = await prisma.supplier.findMany({ orderBy: { updatedAt: 'desc' }, take: 200 });
   res.json(suppliers);
 }));
 
-router.get('/:id/movements', asyncHandler(async (req, res) => {
+router.get('/:id/movements', requirePermission('partyManage'), asyncHandler(async (req, res) => {
   const { id } = idParamSchema.parse(req.params);
   const receipts = await prisma.purchaseReceipt.findMany({
     where: { supplierId: id },
@@ -41,7 +41,7 @@ router.get('/:id/movements', asyncHandler(async (req, res) => {
   })));
 }));
 
-router.post('/', requireRole(['ADMIN', 'MANAGER']), asyncHandler(async (req, res) => {
+router.post('/', requirePermission('partyManage'), asyncHandler(async (req, res) => {
   const data = supplierSchema.parse(req.body);
   const supplier = await prisma.supplier.create({ data: normalizePartyData(data) as any });
   await writeAuditLog(prisma, {
@@ -54,7 +54,7 @@ router.post('/', requireRole(['ADMIN', 'MANAGER']), asyncHandler(async (req, res
   res.status(201).json(supplier);
 }));
 
-router.put('/:id', requireRole(['ADMIN', 'MANAGER']), asyncHandler(async (req, res) => {
+router.put('/:id', requirePermission('partyManage'), asyncHandler(async (req, res) => {
   const { id } = idParamSchema.parse(req.params);
   const data = supplierSchema.partial().parse(req.body);
   const supplier = await prisma.supplier.update({ where: { id }, data: normalizePartyData(data) as any });

@@ -7,7 +7,7 @@ import { StatusPill } from '../../components/StatusPill';
 import { ToastMessage } from '../../components/ToastMessage';
 import type { ToastTone } from '../../components/ToastMessage';
 import { fetchTerminalBootstrapData } from '../../services/api';
-import { loadSettings, saveBootstrapCache } from '../../storage/localStorage';
+import { appendFieldTestLog, loadSettings, saveBootstrapCache } from '../../storage/localStorage';
 import { colors, radius, spacing, typography } from '../theme';
 
 type DataUpdateScreenProps = {
@@ -25,12 +25,22 @@ export function DataUpdateScreen({ onBack }: DataUpdateScreenProps) {
       const settings = await loadSettings();
       const bootstrapData = await fetchTerminalBootstrapData(settings.apiBaseUrl);
       await saveBootstrapCache(bootstrapData);
+      await appendFieldTestLog({
+        title: 'Bootstrap veri indirildi',
+        detail: `${bootstrapData.products.length} ürün / ${bootstrapData.customers.length} müşteri`,
+        tone: 'success',
+      });
       const nextSync = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
       setLastSync(`Bugün ${nextSync}`);
       setProgress('Tamamlandı');
       setBanner({ message: `${bootstrapData.products.length} ürün ve ${bootstrapData.customers.length} müşteri güncellendi.`, tone: 'success' });
     } catch (error) {
       setProgress('Hata');
+      await appendFieldTestLog({
+        title: 'Bootstrap veri indirilemedi',
+        detail: error instanceof Error ? error.message : 'Veri güncelleme başarısız.',
+        tone: 'error',
+      });
       setBanner({ message: error instanceof Error ? error.message : 'Veri güncelleme başarısız.', tone: 'warning' });
     }
   };

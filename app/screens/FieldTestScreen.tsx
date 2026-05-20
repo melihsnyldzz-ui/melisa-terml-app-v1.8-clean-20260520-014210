@@ -14,7 +14,7 @@ import {
   loadFieldTestLogs,
   loadLastSuccessfulConnectionAt,
   loadLastSyncAt,
-  loadOfflineSalesReceipts,
+  loadOfflineSyncSummary,
   resetFieldTestChecklist,
   saveFieldTestChecklist,
 } from '../../storage/localStorage';
@@ -48,16 +48,16 @@ const initialState: FieldTestState = {
 };
 
 const checklistItems: { key: FieldTestChecklistKey; label: string; helper: string }[] = [
-  { key: 'apiHealthChecked', label: 'API bağlantısı test edildi', helper: 'Ayarlar ekranında Health testi başarılı olmalı.' },
-  { key: 'bootstrapDownloaded', label: 'Bootstrap veri indirildi', helper: 'Veri Güncelle ekranı ürün ve müşteri cache’i indirmeli.' },
+  { key: 'apiHealthChecked', label: 'Online login / erişim testi', helper: 'Ayarlar ekranında Health testi OK ve databaseConnected=true olmalı.' },
+  { key: 'bootstrapDownloaded', label: 'Bootstrap veri indirildi', helper: 'Veri Güncelle ekranı ürün ve müşteri cacheini indirmeli.' },
   { key: 'productCacheChecked', label: 'Ürün cache sayısı kontrol edildi', helper: 'Ürün cache sayısı sıfırdan büyük olmalı.' },
   { key: 'customerCacheChecked', label: 'Müşteri cache sayısı kontrol edildi', helper: 'Müşteri cache sayısı sıfırdan büyük olmalı.' },
   { key: 'wifiDisabled', label: 'Wi-Fi kapatıldı', helper: 'Offline senaryo için cihaz bağlantısı kesilmeli.' },
-  { key: 'offlineSaleCreated', label: 'Offline satış oluşturuldu', helper: 'Barkodla satış kaydı cihaz kuyruğuna yazılmalı.' },
-  { key: 'receiptPendingChecked', label: 'Fiş PENDING oldu', helper: 'Gönderilemeyenler ekranında bekleyen fiş görünmeli.' },
+  { key: 'offlineSaleCreated', label: 'Offline barkod okutma testi', helper: 'Barkodla satış kaydı cihaz kuyruğuna yazılmalı.' },
+  { key: 'receiptPendingChecked', label: 'Offline kayıt kuyruğu testi', helper: 'Gönderilemeyenler ekranında bekleyen fiş görünmeli.' },
   { key: 'wifiEnabled', label: 'Wi-Fi açıldı', helper: 'Aynı local ağ bağlantısı tekrar aktif edilmeli.' },
-  { key: 'receiptSynced', label: 'Fiş SYNCED oldu', helper: 'Fiş başarıyla backend’e gönderilmeli.' },
-  { key: 'duplicateSyncChecked', label: 'Duplicate gönderim test edildi', helper: 'Aynı localUuid tekrar gönderildiğinde başarılı kabul edilmeli.' },
+  { key: 'receiptSynced', label: 'Tekrar online olup sync testi', helper: 'Manuel sync sonrası fiş başarıyla backend e gönderilmeli.' },
+  { key: 'duplicateSyncChecked', label: 'Duplicate gönderim engeli testi', helper: 'Aynı localUuid tekrar gönderildiğinde duplicate başarı kabul edilmeli.' },
 ];
 
 export function FieldTestScreen({ onBack }: FieldTestScreenProps) {
@@ -75,29 +75,31 @@ export function FieldTestScreen({ onBack }: FieldTestScreenProps) {
   }, []);
 
   const refreshScreen = async () => {
-    const [lastConnectionAt, products, customers, receipts, lastSyncAt, sqliteActive, savedChecklist, savedLogs] = await Promise.all([
+    const [lastConnectionAt, products, customers, syncSummary, lastSyncAt, sqliteActive, savedChecklist, savedLogs] = await Promise.all([
       loadLastSuccessfulConnectionAt(),
       loadCachedProducts(),
       loadCachedCustomers(),
-      loadOfflineSalesReceipts(),
+      loadOfflineSyncSummary(),
       loadLastSyncAt(),
       checkSQLiteAvailable(),
       loadFieldTestChecklist(),
       loadFieldTestLogs(),
     ]);
 
-    setState({
+    const nextState = {
       lastConnectionAt,
       productCount: products.length,
       customerCount: customers.length,
-      pendingCount: receipts.filter((receipt) => (receipt.status ?? 'PENDING') === 'PENDING').length,
-      failedCount: receipts.filter((receipt) => receipt.status === 'FAILED').length,
-      syncedCount: receipts.filter((receipt) => receipt.status === 'SYNCED' || receipt.synced).length,
+      pendingCount: syncSummary.pending,
+      failedCount: syncSummary.failed,
+      syncedCount: syncSummary.synced,
       lastSyncAt,
       sqliteActive,
-    });
+    };
+    setState(nextState);
     setChecklist(savedChecklist);
     setLogs(savedLogs);
+    return nextState;
   };
 
   const toggleChecklist = async (key: FieldTestChecklistKey) => {
@@ -130,10 +132,10 @@ export function FieldTestScreen({ onBack }: FieldTestScreenProps) {
   };
 
   const handleRefresh = async () => {
-    await refreshScreen();
+    const nextState = await refreshScreen();
     const nextLogs = await appendFieldTestLog({
       title: 'Saha durumu yenilendi',
-      detail: `Ürün: ${state.productCount}, müşteri: ${state.customerCount}, pending: ${state.pendingCount}`,
+      detail: `Ürün: ${nextState.productCount}, müşteri: ${nextState.customerCount}, pending: ${nextState.pendingCount}`,
       tone: 'info',
     });
     setLogs(nextLogs);
@@ -153,9 +155,9 @@ export function FieldTestScreen({ onBack }: FieldTestScreenProps) {
         <StatusRow label="Bootstrap veri indirildi mi?" value={state.productCount > 0 && state.customerCount > 0 ? 'Evet' : 'Hayır'} ok={state.productCount > 0 && state.customerCount > 0} />
         <StatusRow label="Ürün cache sayısı" value={state.productCount.toString()} ok={state.productCount > 0} />
         <StatusRow label="Müşteri cache sayısı" value={state.customerCount.toString()} ok={state.customerCount > 0} />
-        <StatusRow label="Bekleyen fiş sayısı" value={state.pendingCount.toString()} ok={state.pendingCount === 0} />
-        <StatusRow label="Failed fiş sayısı" value={state.failedCount.toString()} ok={state.failedCount === 0} />
-        <StatusRow label="Synced fiş sayısı" value={state.syncedCount.toString()} ok />
+        <StatusRow label="Bekleyen kayıt" value={state.pendingCount.toString()} ok={state.pendingCount === 0} />
+        <StatusRow label="Hatalı kalan" value={state.failedCount.toString()} ok={state.failedCount === 0} />
+        <StatusRow label="Başarılı gönderilen" value={state.syncedCount.toString()} ok />
         <StatusRow label="Son sync zamanı" value={state.lastSyncAt ? formatDate(state.lastSyncAt) : 'Yok'} ok={Boolean(state.lastSyncAt)} />
         <StatusRow label="SQLite aktif mi?" value={state.sqliteActive ? 'Evet' : 'Hayır'} ok={state.sqliteActive} />
       </View>

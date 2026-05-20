@@ -18,7 +18,7 @@ export async function writeAuditLog(
       action: input.action,
       entityType: input.entityType,
       entityId: input.entityId,
-      userId: input.userId ?? null,
+      userId: input.userId && input.userId > 0 ? input.userId : null,
       detailsJson: input.detailsJson ?? undefined,
     },
   });

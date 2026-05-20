@@ -2,11 +2,15 @@ import { Router } from 'express';
 import { getDatabaseUrl } from '../../config.js';
 import { prisma } from '../../prisma/client.js';
 import { asyncHandler } from '../../utils.js';
-import { requireRole } from '../auth/auth.js';
+import { permissionGroups, requirePermission, rolePermissions } from '../auth/auth.js';
 
 const router = Router();
 
-router.get('/status', requireRole(['ADMIN', 'MANAGER']), asyncHandler(async (_req, res) => {
+router.get('/permissions', requirePermission('reportsView'), (_req, res) => {
+  res.json({ permissionGroups, rolePermissions });
+});
+
+router.get('/status', requirePermission('reportsView'), asyncHandler(async (_req, res) => {
   let databaseConnected = false;
   if (getDatabaseUrl()) {
     try {
@@ -35,11 +39,10 @@ router.get('/status', requireRole(['ADMIN', 'MANAGER']), asyncHandler(async (_re
     appVersion: process.env.npm_package_version ?? '0.1.0',
     environment: process.env.NODE_ENV ?? 'development',
     activeUser: activeUser ?? { id: null, name: 'Hazirlik kullanicisi', username: 'admin', role: 'ADMIN', active: true },
-    roleRules: {
-      ADMIN: ['Tum islemler'],
-      MANAGER: ['Fis, stok ve cari goruntuleme', 'Kur guncelleme', 'Fis iptal'],
-      STAFF: ['Satis/alis fisi giris', 'Kur degistiremez', 'Fis iptal edemez'],
-    },
+    roleRules: Object.fromEntries(Object.entries(rolePermissions).map(([role, permissions]) => [
+      role,
+      permissions.map((permission) => permissionGroups[permission]),
+    ])),
     recentAuditLogs,
   });
 }));

@@ -11,6 +11,8 @@ enum MovementType {
   PURCHASE_IN
   SALE_OUT
   ADJUSTMENT
+  ADJUSTMENT_IN
+  ADJUSTMENT_OUT
   CANCEL
 }
 
@@ -31,9 +33,59 @@ enum ReceiptStatus {
   CANCELLED
 }
 
+enum CurrentAccountPartyType {
+  CUSTOMER
+  SUPPLIER
+}
+
+enum CurrentAccountDocumentType {
+  SALES_RECEIPT
+  PURCHASE_RECEIPT
+  PAYMENT
+  COLLECTION
+  CANCEL
+}
+
+enum CurrentAccountDirection {
+  DEBIT
+  CREDIT
+}
+
+enum PaymentMethod {
+  CASH
+  BANK
+  CARD
+  OTHER
+}
+
+enum ImportJobKind {
+  PRODUCTS
+  CUSTOMERS
+  SUPPLIERS
+  PRICES
+  STOCK
+}
+
+enum ImportJobMode {
+  createOnly
+  updateOnly
+  upsert
+  stockAdjustment
+}
+
+enum ImportJobStatus {
+  PREVIEWED
+  APPLIED
+  FAILED
+}
+
 enum UserRole {
   ADMIN
   MANAGER
+  SALES
+  WAREHOUSE
+  ACCOUNTING
+  VIEWER
   STAFF
 }
 
@@ -42,11 +94,12 @@ model User {
   name         String
   username     String     @unique
   passwordHash String     @map("password_hash")
-  role         UserRole   @default(STAFF)
+  role         UserRole   @default(VIEWER)
   active       Boolean    @default(true)
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
   auditLogs    AuditLog[]
+  importJobs   ImportJob[]
 
   @@map("users")
 }
@@ -73,11 +126,15 @@ model Product {
   brand              String
   typeName           String                @map("type_name")
   quantity           Decimal               @default(0) @db.Decimal(12, 2)
+  currency           Currency              @default(TRY)
+  purchasePrice      Decimal               @default(0) @map("purchase_price") @db.Decimal(12, 2)
+  salePrice          Decimal               @default(0) @map("sale_price") @db.Decimal(12, 2)
   buyPrice           Decimal               @default(0) @map("buy_price") @db.Decimal(12, 2)
   sellPrice          Decimal               @default(0) @map("sell_price") @db.Decimal(12, 2)
   buyPriceTry        Decimal               @default(0) @map("buy_price_try") @db.Decimal(12, 2)
   buyPriceUsd        Decimal?              @map("buy_price_usd") @db.Decimal(12, 2)
   buyPriceEur        Decimal?              @map("buy_price_eur") @db.Decimal(12, 2)
+  averageCostTry     Decimal               @default(0) @map("average_cost_try") @db.Decimal(12, 2)
   sellPriceTry       Decimal               @default(0) @map("sell_price_try") @db.Decimal(12, 2)
   sellPriceUsd       Decimal?              @map("sell_price_usd") @db.Decimal(12, 2)
   sellPriceEur       Decimal?              @map("sell_price_eur") @db.Decimal(12, 2)
@@ -104,6 +161,7 @@ model Customer {
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
   salesReceipts SalesReceipt[]
+  currentAccountMovements CurrentAccountMovement[]
 
   @@map("customers")
 }
@@ -121,6 +179,7 @@ model Supplier {
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @updatedAt @map("updated_at")
   purchaseReceipts PurchaseReceipt[]
+  currentAccountMovements CurrentAccountMovement[]
 
   @@map("suppliers")
 }
@@ -132,6 +191,10 @@ model PurchaseReceipt {
   totalAmount   Decimal               @map("total_amount") @db.Decimal(12, 2)
   totalAmountTry Decimal?              @map("total_amount_try") @db.Decimal(12, 2)
   currency      Currency              @default(TRY)
+  documentCurrency Currency             @default(TRY) @map("document_currency")
+  exchangeRateToTry Decimal             @default(1) @map("exchange_rate_to_try") @db.Decimal(12, 6)
+  originalTotal Decimal                 @default(0) @map("original_total") @db.Decimal(12, 2)
+  totalTry      Decimal                 @default(0) @map("total_try") @db.Decimal(12, 2)
   exchangeRateSnapshot Json?           @map("exchange_rate_snapshot")
   usdToTry      Decimal               @default(1) @map("usd_to_try") @db.Decimal(12, 6)
   eurToTry      Decimal               @default(1) @map("eur_to_try") @db.Decimal(12, 6)
@@ -155,6 +218,11 @@ model PurchaseReceiptItem {
   quantity          Decimal         @db.Decimal(12, 2)
   unitPrice         Decimal         @map("unit_price") @db.Decimal(12, 2)
   lineTotal         Decimal         @map("line_total") @db.Decimal(12, 2)
+  lineCurrency      Currency        @default(TRY) @map("line_currency")
+  unitPriceOriginal Decimal         @default(0) @map("unit_price_original") @db.Decimal(12, 2)
+  lineTotalOriginal Decimal         @default(0) @map("line_total_original") @db.Decimal(12, 2)
+  unitPriceTry      Decimal         @default(0) @map("unit_price_try") @db.Decimal(12, 2)
+  lineTotalTry      Decimal         @default(0) @map("line_total_try") @db.Decimal(12, 2)
   currency          Currency        @default(TRY)
   originalUnitPrice Decimal?        @map("original_unit_price") @db.Decimal(12, 2)
   originalCurrency  Currency?       @map("original_currency")
@@ -177,6 +245,10 @@ model SalesReceipt {
   totalAmount   Decimal            @map("total_amount") @db.Decimal(12, 2)
   totalAmountTry Decimal?           @map("total_amount_try") @db.Decimal(12, 2)
   currency      Currency           @default(TRY)
+  documentCurrency Currency          @default(TRY) @map("document_currency")
+  exchangeRateToTry Decimal          @default(1) @map("exchange_rate_to_try") @db.Decimal(12, 6)
+  originalTotal Decimal              @default(0) @map("original_total") @db.Decimal(12, 2)
+  totalTry      Decimal              @default(0) @map("total_try") @db.Decimal(12, 2)
   exchangeRateSnapshot Json?        @map("exchange_rate_snapshot")
   usdToTry      Decimal            @default(1) @map("usd_to_try") @db.Decimal(12, 6)
   eurToTry      Decimal            @default(1) @map("eur_to_try") @db.Decimal(12, 6)
@@ -203,6 +275,15 @@ model SalesReceiptItem {
   quantity       Decimal      @db.Decimal(12, 2)
   unitPrice      Decimal      @map("unit_price") @db.Decimal(12, 2)
   lineTotal      Decimal      @map("line_total") @db.Decimal(12, 2)
+  lineCurrency   Currency     @default(TRY) @map("line_currency")
+  unitPriceOriginal Decimal   @default(0) @map("unit_price_original") @db.Decimal(12, 2)
+  lineTotalOriginal Decimal   @default(0) @map("line_total_original") @db.Decimal(12, 2)
+  unitPriceTry   Decimal      @default(0) @map("unit_price_try") @db.Decimal(12, 2)
+  lineTotalTry   Decimal      @default(0) @map("line_total_try") @db.Decimal(12, 2)
+  unitCostTry    Decimal      @default(0) @map("unit_cost_try") @db.Decimal(12, 2)
+  totalCostTry   Decimal      @default(0) @map("total_cost_try") @db.Decimal(12, 2)
+  grossProfitTry Decimal      @default(0) @map("gross_profit_try") @db.Decimal(12, 2)
+  profitMargin   Decimal      @default(0) @map("profit_margin") @db.Decimal(12, 4)
   currency       Currency     @default(TRY)
   originalUnitPrice Decimal?   @map("original_unit_price") @db.Decimal(12, 2)
   originalCurrency  Currency?  @map("original_currency")
@@ -223,12 +304,89 @@ model StockMovement {
   productId          Int           @map("product_id")
   movementType       MovementType  @map("movement_type")
   quantity           Decimal       @db.Decimal(12, 2)
+  unitCostTry        Decimal?      @map("unit_cost_try") @db.Decimal(12, 2)
+  valueChangeTry     Decimal?      @map("value_change_try") @db.Decimal(12, 2)
+  stockAfter         Decimal?      @map("stock_after") @db.Decimal(12, 2)
+  averageCostAfterTry Decimal?     @map("average_cost_after_try") @db.Decimal(12, 2)
   sourceDocumentType String        @map("source_document_type")
   sourceDocumentId   Int           @map("source_document_id")
+  note               String?
   createdAt          DateTime      @default(now()) @map("created_at")
   product            Product       @relation(fields: [productId], references: [id])
 
   @@map("stock_movements")
+}
+
+model ImportJob {
+  id             Int             @id @default(autoincrement())
+  kind           ImportJobKind
+  mode           ImportJobMode
+  fileName       String?         @map("file_name")
+  status         ImportJobStatus @default(PREVIEWED)
+  totalRows      Int             @default(0) @map("total_rows")
+  validRows      Int             @default(0) @map("valid_rows")
+  warningRows    Int             @default(0) @map("warning_rows")
+  errorRows      Int             @default(0) @map("error_rows")
+  duplicateRows  Int             @default(0) @map("duplicate_rows")
+  createdCount   Int             @default(0) @map("created_count")
+  updatedCount   Int             @default(0) @map("updated_count")
+  skippedCount   Int             @default(0) @map("skipped_count")
+  appliedBy      Int?            @map("applied_by")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  appliedAt      DateTime?       @map("applied_at")
+  rows           ImportJobRow[]
+  appliedUser    User?           @relation(fields: [appliedBy], references: [id])
+
+  @@index([kind, status])
+  @@index([createdAt])
+  @@map("import_jobs")
+}
+
+model ImportJobRow {
+  id          Int       @id @default(autoincrement())
+  importJobId Int       @map("import_job_id")
+  rowNumber   Int       @map("row_number")
+  status      String
+  action      String
+  errorJson   Json?     @map("error_json")
+  warningJson Json?     @map("warning_json")
+  rawJson     Json?     @map("raw_json")
+  entityId    Int?      @map("entity_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  importJob   ImportJob @relation(fields: [importJobId], references: [id], onDelete: Cascade)
+
+  @@index([importJobId])
+  @@index([status])
+  @@map("import_job_rows")
+}
+
+model CurrentAccountMovement {
+  id           Int                         @id @default(autoincrement())
+  partyType    CurrentAccountPartyType      @map("party_type")
+  customerId   Int?                        @map("customer_id")
+  supplierId   Int?                        @map("supplier_id")
+  documentType CurrentAccountDocumentType   @map("document_type")
+  documentId   Int                         @map("document_id")
+  documentNo   String                      @map("document_no")
+  direction    CurrentAccountDirection
+  currency     Currency                    @default(TRY)
+  amount       Decimal                     @db.Decimal(12, 2)
+  amountTry    Decimal?                    @map("amount_try") @db.Decimal(12, 2)
+  accountCurrency Currency                  @default(TRY) @map("account_currency")
+  accountAmount Decimal                     @default(0) @map("account_amount") @db.Decimal(12, 2)
+  documentCurrency Currency                 @default(TRY) @map("document_currency")
+  documentAmount Decimal                    @default(0) @map("document_amount") @db.Decimal(12, 2)
+  description  String?
+  paymentMethod PaymentMethod?             @map("payment_method")
+  createdAt    DateTime                    @default(now()) @map("created_at")
+  customer     Customer?                   @relation(fields: [customerId], references: [id])
+  supplier     Supplier?                   @relation(fields: [supplierId], references: [id])
+
+  @@index([partyType, customerId])
+  @@index([partyType, supplierId])
+  @@index([documentType, documentId])
+  @@index([createdAt])
+  @@map("current_account_movements")
 }
 
 model TerminalSyncQueue {

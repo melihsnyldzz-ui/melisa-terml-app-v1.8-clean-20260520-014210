@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../../prisma/client.js';
 import { asyncHandler } from '../../utils.js';
 import { writeAuditLog } from '../audit/audit.js';
-import { requireAuth, requireRole } from '../auth/auth.js';
+import { requireAuth, requirePermission } from '../auth/auth.js';
 
 const router = Router();
 
@@ -22,12 +22,12 @@ router.get('/active', asyncHandler(async (_req, res) => {
   res.json(rate);
 }));
 
-router.get('/', asyncHandler(async (_req, res) => {
+router.get('/', requireAuth, requirePermission('reportsView'), asyncHandler(async (_req, res) => {
   const rates = await prisma.exchangeRate.findMany({ orderBy: { effectiveDate: 'desc' }, take: 50 });
   res.json(rates);
 }));
 
-router.post('/', requireAuth, requireRole(['ADMIN', 'MANAGER']), asyncHandler(async (req, res) => {
+router.post('/', requireAuth, requirePermission('priceUpdate'), asyncHandler(async (req, res) => {
   const data = rateSchema.parse(req.body);
   const tryToUsd = data.tryToUsd ?? 1 / data.usdToTry;
   const tryToEur = data.tryToEur ?? 1 / data.eurToTry;
