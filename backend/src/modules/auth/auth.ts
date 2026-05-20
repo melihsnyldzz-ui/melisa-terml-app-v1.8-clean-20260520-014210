@@ -17,6 +17,10 @@ declare global {
   }
 }
 
+function isLocalWebAdminOpenMode() {
+  return process.env.NODE_ENV !== 'production' && process.env.WEB_ADMIN_OPEN_MODE === 'true';
+}
+
 export function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
   if (!secret && process.env.NODE_ENV === 'production') {
@@ -33,6 +37,13 @@ export function signToken(user: AuthUser) {
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   const header = req.header('authorization') ?? '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+
+  if (!token && isLocalWebAdminOpenMode()) {
+    req.user = { userId: 0, username: 'open-admin', role: 'ADMIN' };
+    next();
+    return;
+  }
+
   if (!token) {
     res.status(401).json({ ok: false, message: 'Oturum gerekli. Lutfen giris yapin.' });
     return;
